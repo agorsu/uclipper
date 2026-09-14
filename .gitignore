@@ -1,0 +1,8 @@
+# Distribution / packaging
+Include/
+Lib/
+Scripts/
+.venv/
+env/
+__pycache__/
+pyvenv.cfg
