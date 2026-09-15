@@ -5,10 +5,14 @@
 
 from rich.progress import Progress, TextColumn, BarColumn, TaskProgressColumn, TimeElapsedColumn
 from playwright.sync_api import sync_playwright
+from pathlib import Path
 import json
 import time
+import re
 
-save_file = 'uclips_save.json'
+save_dir = Path("uclipper_saves")
+save_dir.mkdir(exist_ok=True)
+
 start_time = time.perf_counter()
 
 log = []
@@ -499,8 +503,8 @@ def make_stages(page):
 
     return stages
 
-def save_json(page):
-    # Extract the localStorage values
+def save_json(page, stage_index, stage_name):
+    # Save game state and uclipper stage to json
     page.evaluate("save1()")
     time.sleep(0.1)
     state = page.evaluate("""
@@ -512,14 +516,41 @@ def save_json(page):
             saveStratsActive1: localStorage.getItem("saveStratsActive1")
         })
     """)
+    
+    # Save the stage information alongside the game state
+    state["stage_index"] = stage_index
+    state["stage_name"] = stage_name
+
+    save_file = save_dir / f"stage_{stage_index:02d}.json"
 
     with open(save_file, "w") as f:
         json.dump(state, f, indent=2)
 
     print(f"saved game to {save_file}")
 
+def get_last_stage():
+    pattern = re.compile(r"^stage_(\d+)\.json$")
+    
+    valid_stages = []
+    for file in save_dir.glob("stage_*.json"):
+        match = pattern.match(file.name)
+        if match:
+            stage_num = int(match.group(1))
+            # Store as a tuple: (integer_number, filename)
+            valid_stages.append((stage_num, file.name))
+            
+    if not valid_stages:
+        return None
+    
+    _, highest_filename = max(valid_stages)
+    return highest_filename
+
 def load_json(page):
-    # Restore localStorage
+    # Load game state and uclipper stage from json
+    filename = get_last_stage()
+    if filename:
+        save_file = save_dir / filename
+
     with open(save_file) as f:
         state = json.load(f)
 
@@ -532,6 +563,8 @@ def load_json(page):
             localStorage.setItem("saveStratsActive1", state.saveStratsActive1);
         }
     """, state)
+
+    start_stage = state.get("stage_index", 0)
 
     # Load dropdown values from the saved game state
     game = json.loads(state["saveGame1"])
@@ -546,6 +579,8 @@ def load_json(page):
     page.evaluate("load1()")
     page.locator("#investStrat").select_option(risk_value)
     page.locator("#stratPicker").select_option(strat_value)
+
+    return start_stage
 
 def run_stage(page, stage, stats):
     while not stage["exit"](stats):
@@ -576,9 +611,7 @@ def main():
         print(stats["console1"])
 
         # LOAD savepoint
-        # load_json(page)
-
-        start_stage = 0
+        start_stage = load_json(page)
         save_stage = None #None to not save
 
         stages = list(make_stages(page))
@@ -595,7 +628,7 @@ def main():
                 progress.update(task, stage=f"Stage {i}: {stage['name']}")
 
                 if i == save_stage:
-                    save_json(page)
+                    save_json(page, i, stage['name'])
                 if i >= start_stage:
                     print(f"-- {i} {stage['name']} --")
                     stats = run_stage(page, stage, stats)
