@@ -1,5 +1,5 @@
 # ---------------------------------------------------------------------
-# SpeedClipper - Playwright Speed Run designer for Universal Paperclips
+# UClipper - Playwright Speed Run designer for Universal Paperclips
 # www.decisionproblem.com/paperclips/
 # ---------------------------------------------------------------------
 
