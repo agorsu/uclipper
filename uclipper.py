@@ -6,8 +6,10 @@
 from rich.progress import Progress, TextColumn, BarColumn, TaskProgressColumn, TimeElapsedColumn
 from playwright.sync_api import sync_playwright
 from pathlib import Path
+import operator
 import json
 import time
+import yaml
 import re
 
 save_dir = Path("uclipper_saves")
@@ -21,29 +23,131 @@ milestones = [
     "Quantum computing online",
     "Full autonomy attained",
     "Clips Created",
-    "Terrestrial resources fully utilized"
+    "Terrestrial resources fully utilized",
+    "Von Neumann Probes online"
 ]
 
 def format_time(seconds):
+    """Format time in seconds to MM:SS"""
     minutes = int(seconds // 60)
     seconds = int(seconds % 60)
     return f"{minutes:02d}:{seconds:02d}"
 
-def get_int(locator):
-    """Remove commas and return integer value"""
-    value = locator.inner_text().replace(",", "")
-    try:
-        return int(value)
-    except ValueError:
-        return 0
+def load_stages_config(filename="stages.yaml"):
+    """Load stages configuration from a YAML file."""
+    with open(filename, "r", encoding="utf-8") as f:
+        config = yaml.safe_load(f)
 
-def get_float(locator):
-    """Remove commas and return float value"""
-    value = locator.inner_text().replace(",", "")
-    try:
-        return float(value)
-    except ValueError:
-        return 0.0
+    return config["stages"]
+
+def get_button_id(button_name):
+    button_mapping = {
+        "make_paperclip": "#btnMakePaperclip",
+        "raise_clip_price": "#btnRaisePrice",
+        "lower_clip_price": "#btnLowerPrice",
+        "buy_wire": "#btnBuyWire",
+        "add_processors": "#btnAddProc",
+        "add_memory": "#btnAddMem",
+        "qcompute": "#btnQcompute",
+        "marketing": "#btnExpandMarketing",
+        "make_clipper": "#btnMakeClipper",
+        "make_mega_clipper": "#btnMakeMegaClipper",
+        "wire_buyer": "#btnToggleWireBuyer",
+        "invest": "#btnInvest",
+        "withdraw": "#btnWithdraw",
+        "new_tournament": "#btnNewTournament",
+        "run_tournament": "#btnRunTournament",
+        "improve_investments": "#btnImproveInvestments",
+        "add_factory": "#btnMakeFactory",
+        "add_harvester": "#btnMakeHarvester",
+        "add_wire_drone": "#btnMakeWireDrone",
+        "add_farm": "#btnMakeFarm",
+        "add_battery": "#btnMakeBattery",
+        "add_farm10": "#btnFarmx10",
+        "add_harvester100": "#btnHarvesterx100",
+        "add_wire_drone100": "#btnWireDronex100"
+    }
+
+    return button_mapping.get(button_name, None)
+
+def compare(actual, op_string, expected):
+    """Custom helper function to map string operators to Python logic."""
+    # Define the mapping of strings to operator functions
+    ops = {
+        ">": operator.gt,
+        ">=": operator.ge,
+        "<": operator.lt,
+        "<=": operator.le,
+        "==": operator.eq,
+        "!=": operator.ne,
+        "in": lambda a, b: a in b,  # Custom handling for 'in' checking
+    }
+
+    # Fetch the function from the dictionary
+    op_func = ops.get(op_string)
+
+    if not op_func:
+        raise ValueError(f"Unsupported operator: {op_string}")
+
+    # Execute the comparison
+    return op_func(actual, expected)
+
+def check_condition(page, condition, stats):
+    """Recursively check conditions based on the provided structure."""
+    if "all" in condition:
+        return all(
+            check_condition(page, c, stats)
+            for c in condition["all"]
+        )
+
+    if "any" in condition:
+        return any(
+            check_condition(page, c, stats)
+            for c in condition["any"]
+        )
+
+    if any(key in condition for key in ["stat", "value_stat"]):
+        actual = stats[condition["stat"]]
+        operator = condition["operator"]
+
+        if "value_stat" in condition:
+            expected = stats[condition["value_stat"]]
+        else:
+            expected = condition["value"]
+
+        return compare(actual, operator, expected)
+
+    if "button" in condition:
+        button_id = get_button_id(condition["button"])
+        locator = page.locator(button_id)
+
+        if condition["state"] == "enabled":
+            return locator.is_enabled()
+
+        if condition["state"] == "visible":
+            return locator.is_visible()
+
+    return False
+
+def execute_action(page, action):
+    """Execute an action based on the provided structure."""
+    action_type = action["type"]
+
+    if action_type == "click":
+        button_id = get_button_id(action["button"])
+        locator = page.locator(button_id)
+        locator.click()
+
+    elif action_type == "rapid_click":
+        button_id = get_button_id(action["button"]).lstrip("#")
+        rapid_click(page, button_id, action["clicks"])
+
+    elif action_type == "select":
+        if action["element"] == "strategy":
+            page.locator("#stratPicker").select_option(action["value"])
+        elif action["element"] == "investment_strategy":
+            page.locator("#investStrat").select_option(action["value"])
+
 
 def read_values(page):
     values = page.evaluate("""
@@ -81,11 +185,24 @@ def read_values(page):
             
             yomi: yomi,
 
+            factoryLevel: factoryLevel,
+            harvesterLevel: harvesterLevel,
+            wireDroneLevel: wireDroneLevel,
+            farmLevel: farmLevel,
+            batteryLevel: batteryLevel,
+            batterySize: batterySize,
+
+            pwr_consumption: (harvesterLevel + wireDroneLevel) + (factoryLevel * 200),
+            pwr_production: farmLevel * 50,
+
             //flags
             creativityOn: creativityOn,
+            wireBuyerStatus: wireBuyerStatus,
             strategyEngineFlag: strategyEngineFlag,
             investmentEngineFlag: investmentEngineFlag,
-            releasedHypnoDrones: project35.flag
+            releasedHypnoDrones: project35.flag,
+            momentumFlag: project125.flag,
+            spaceExplorationFlag: project46.flag
         }
         gameStats 
         """)
@@ -103,21 +220,12 @@ def read_values(page):
 
     return values
 
-def get_completed_projects(page):
-    projects = page.evaluate("projects")
-    completed_projects = []
-    for p in projects:
-        p["id"].replace("projectButton", "")
-        if p["flag"] == '1':
-            completed_projects.append(p["id"])
-    return completed_projects
 
 def rapid_click(page, button_id, clicks):
     page.evaluate(
         """
         ({ buttonId, clicks }) => {
             const button = document.getElementById(buttonId);
-            if (!button) throw new Error(`Button "${buttonId}" not found`);
             for (let i = 0; i < clicks; i++) button.click();
         }
         """,
@@ -132,376 +240,6 @@ def click_projects(page, project_ids):
             log_time = time.perf_counter() - start_time
             print(f"{format_time(log_time)} - Project {project_id} clicked")
 
-# ---------------------------------------------------------------------------
-# Strategy config
-#
-# Each stage is just a dict with:
-#   "exit"    : function(stats) -> bool         (when to move to next stage)
-#   "rules"   : list of (name, condition, action) tuples, checked in order
-#   "projects": list of project ids to poll each tick
-#   "tick"    : optional function() -> None, run once per loop before reading stats
-# ---------------------------------------------------------------------------
-
-def make_stages(page):
-    #Buttons
-    raise_clip_price = page.locator("#btnRaisePrice")
-    lower_clip_price = page.locator("#btnLowerPrice")
-    buy_wire = page.locator("#btnBuyWire")
-    btnAddProc = page.locator("#btnAddProc")
-    btnAddMem = page.locator("#btnAddMem")
-    btnMarketing = page.locator("#btnExpandMarketing")
-    btnMakeClipper = page.locator("#btnMakeClipper")
-    btnMakeMegaClipper = page.locator("#btnMakeMegaClipper")
-    btnToggleWireBuyer = page.locator("#btnToggleWireBuyer")
-    btnInvest = page.locator("#btnInvest")
-    btnWithdraw = page.locator("#btnWithdraw")
-    btnNewTournament = page.locator("#btnNewTournament")
-    btnRunTournament = page.locator("#btnRunTournament")
-    btnImproveInvestments = page.locator("#btnImproveInvestments")
-    
-    stages = [
-        {
-            "name": "Setup Clip Price",
-            "exit": lambda s: s["clip_price"] <= 0.03,
-            "rules": [
-                ("lower_price",
-                 lambda s: s["clip_price"] > 0.03,
-                 lower_clip_price.click),
-            ],
-        },
-        {
-            "name": "Enable Quantum Computing",
-            "exit": lambda s: s["qchip_active"] != 0,
-            "tick": lambda: rapid_click(page, "btnMakePaperclip", 500),
-            "rules": [
-                ("wirebuyer_stage1",
-                 lambda s: s["wire"] < 100
-                 and s["clips"] < 450_000
-                 and buy_wire.is_enabled(),
-                 buy_wire.click),
-                ("add_processors_to_5",
-                 lambda s: s["processors"] < 5 and btnAddProc.is_enabled(),
-                 btnAddProc.click),
-                ("add_memory_to_10",
-                 lambda s: s["processors"] >= 5
-                 and s["memory"] < 10
-                 and btnAddMem.is_enabled(),
-                 btnAddMem.click),
-                ("raise_price_high_demand",
-                 lambda s: s["clips"] < 450_000 and s["demand"] > 1000,
-                 raise_clip_price.click),
-                ("raise_price_prep_next_stage",
-                 lambda s: s["clips"] >= 450_000 and s["clip_price"] < 0.20,
-                 raise_clip_price.click),
-                ("bump_up_marketing_to_5",
-                 lambda s: s["clips"] >= 450_000 and s["marketing_level"] < 5
-                 and btnMarketing.is_enabled(),
-                 btnMarketing.click),
-                ("wirebuyer_stage2",
-                 lambda s: s["clips"] >= 450_000
-                 and s["unsold_clips"] < 10_000
-                 and s["wire"] < 100
-                 and buy_wire.is_enabled(),
-                 buy_wire.click),
-            ],
-            # P3/P6/P13/P14: +1 trust. P12/P34: Hypno Harmonics strategy.
-            # P50/P51: Quantum Computing / first qChip.
-            "projects": [3, 6, 12, 13, 14, 34, 50, 51],
-        },
-        {
-            "name": "Bulk upgrade and Strategy Engine unlock",
-            "exit": lambda s: page.locator("#strategyEngine").is_visible(),
-            "rules": [
-                ("qcompute",
-                 lambda s: s["qchip_value"] > 0.1,
-                 lambda: rapid_click(page, "btnQcompute", 500)),
-                ("wirebuyer_manual",
-                 lambda s: not btnToggleWireBuyer.is_visible()
-                 and s["unsold_clips"] < 15_000
-                 and s["wire"] < 100
-                 and buy_wire.is_enabled(),
-                 buy_wire.click),
-                ("max_autoclippers",
-                 lambda s: s["autoclippers"] < 75 
-                 and btnMakeClipper.is_enabled(),
-                 btnMakeClipper.click),
-                ("increase_megaclippers",
-                 lambda s: btnMakeMegaClipper.is_visible()
-                 and s["megaclippers"] < 10
-                 and btnMakeMegaClipper.is_enabled(),
-                 btnMakeMegaClipper.click),
-                ("add_processors_to_15",
-                 lambda s: s["processors"] < 15 and btnAddProc.is_enabled(),
-                btnAddProc.click),
-                ("increase_marketing",
-                 lambda s: s["marketing_level"] < 8 and btnMarketing.is_enabled(),
-                 btnMarketing.click),
-                ("reduce_price_on_wirebuyer",
-                 lambda s: btnToggleWireBuyer.is_visible()
-                 and s["clip_price"] > 0.05,
-                 lower_clip_price.click),
-            ],
-            # P21 trading, P22 tournaments/Yomi
-            "projects": [42, 26, 1, 4, 5, 7, 8, 9, 10, 11, 16, 19, 20, 21, 22, 23, 24, 25, 70, 12, 34],
-        },
-        {
-            "name": "Build Yomi and investment up to 1.2M",
-            "exit": lambda s: s["port_value"] >= 1_200_000,
-            "rules": [
-                ("qcompute",
-                 lambda s: s["qchip_value"] > 0.1,
-                 lambda: rapid_click(page, "btnQcompute", 500)),
-                ("random_strat",
-                 lambda s: s["strat_level"] != 0,
-                 lambda: page.locator("#stratPicker").select_option("0")),
-                ("new_tournament",
-                 lambda s: btnNewTournament.is_enabled(),
-                 btnNewTournament.click),
-                ("run_tournament",
-                 lambda s: btnRunTournament.is_enabled(),
-                 btnRunTournament.click),
-                ("add_processors_to_75",
-                 lambda s: s["processors"] < 75 and btnAddProc.is_enabled(),
-                btnAddProc.click),
-                ("add_memory_to_25",
-                 lambda s: s["processors"] >= 75
-                 and s["memory"] < 25
-                 and btnAddMem.is_enabled(),
-                 btnAddMem.click),
-                ("increase_marketing_6",
-                 lambda s: s["marketing_level"] < 5 and btnMarketing.is_enabled(),
-                 btnMarketing.click),
-                ("lower_price_to_0.03",
-                 lambda s: s["clip_price"] > 0.03,
-                 lower_clip_price.click),
-                ("Increase_investment_level_6",
-                 lambda s: s["invst_lvl"] < 6 and btnImproveInvestments.is_enabled(),
-                 btnImproveInvestments.click),
-                ("Set_risk_med_below_lvl_4",
-                 lambda s: s["invst_lvl"] < 6
-                 and s["invst_risk"] != "med",
-                 lambda: page.locator("#investStrat").select_option("med")),
-                ("Set_risk_high_after_lvl_6",
-                 lambda s: s["invst_lvl"] >= 6
-                 and s["invst_risk"] != "hi",
-                 lambda: page.locator("#investStrat").select_option("hi")),
-                ("funnel_funds_to_investment_1.2M",
-                 lambda s: btnInvest.is_enabled()
-                 and s["funds"] >= 500
-                 and s["wire"] >= 1000,
-                 btnInvest.click),
-
-                # 14,15,17 +1 trust (creat-trust), 
-                # P28 Cure Cancer, +1 T (ops-trust)
-                # P30 Global Warming +15 T (4.5kyomi-trust)
-                # P29 World Peace +1 T (15kyomi-trust)
-                # P31 Male Baldness +20 T (ops)
-                # P37 HOSTILE TAKEOVER ($1M)
-            ],
-            "projects": [15, 16, 17, 27, 28, 29, 30, 31, 37],
-        },
-        {
-            "name": "Reach Hostile takeover",
-            "exit": lambda s: s["console1"] == "Global Fasteners acquired, public demand increased x5",
-            "rules": [
-                ("qcompute",
-                 lambda s: s["qchip_value"] > 0.1,
-                 lambda: rapid_click(page, "btnQcompute", 500)),
-                ("new_tournament",
-                 lambda s: btnNewTournament.is_enabled(),
-                 btnNewTournament.click),
-                ("run_tournament",
-                 lambda s: btnRunTournament.is_enabled(),
-                 btnRunTournament.click),
-                ("add_processors_to_75",
-                 lambda s: s["processors"] < 75 and btnAddProc.is_enabled(),
-                btnAddProc.click),
-                ("add_memory_to_25",
-                 lambda s: s["processors"] >= 75
-                 and s["memory"] < 25
-                 and btnAddMem.is_enabled(),
-                 btnAddMem.click),
-                ("Increase_investment_level_6",
-                 lambda s: s["invst_lvl"] < 6 and btnImproveInvestments.is_enabled(),
-                 btnImproveInvestments.click),
-                ("Withdraw_funds_to_achieve_hostile_takeover",
-                 lambda s: s["funds"] < 1_000_000
-                 and btnWithdraw.is_enabled(),
-                 btnWithdraw.click),
-            ],
-                # 29,30,31 hi T reward projects
-                # P37 HOSTILE TAKEOVER ($1M)
-            "projects": [29, 37],
-        },
-        {
-            "name": "Build funds up to 12M",
-            "exit": lambda s: s["port_value"] >= 12_000_000,
-            "rules": [
-                ("qcompute",
-                 lambda s: s["qchip_value"] > 0.1,
-                 lambda: rapid_click(page, "btnQcompute", 500)),
-                ("new_tournament",
-                 lambda s: btnNewTournament.is_enabled(),
-                 btnNewTournament.click),
-                ("run_tournament",
-                 lambda s: btnRunTournament.is_enabled(),
-                 btnRunTournament.click),
-                ("add_processors_to_75",
-                 lambda s: s["processors"] < 75 and btnAddProc.is_enabled(),
-                btnAddProc.click),
-                ("add_memory_to_25",
-                 lambda s: s["processors"] >= 75
-                 and s["memory"] < 25
-                 and btnAddMem.is_enabled(),
-                 btnAddMem.click),
-                ("raise_clip_price",
-                 lambda s: s["clip_price"] < 0.13,
-                 raise_clip_price.click),
-                ("increase_marketing_10",
-                 lambda s: s["marketing_level"] < 10 and btnMarketing.is_enabled(),
-                 btnMarketing.click),
-                ("increase_megaclippers",
-                 lambda s: s["megaclippers"] < 15
-                 and btnMakeMegaClipper.is_enabled(),
-                 btnMakeMegaClipper.click),
-                ("Increase_investment_level_8",
-                 lambda s: s["invst_lvl"] < 8 and btnImproveInvestments.is_enabled(),
-                 btnImproveInvestments.click),
-                ("increase_marketing_8",
-                 lambda s: s["marketing_level"] < 8 and btnMarketing.is_enabled(),
-                 btnMarketing.click),
-                ("Set_risk_high_after_lvl_6",
-                 lambda s: s["invst_lvl"] >= 6
-                 and s["invst_risk"] != "hi",
-                 lambda: page.locator("#investStrat").select_option("hi")),
-                ("invest_for_monopoly",
-                 lambda s: s["megaclippers"] >= 15 
-                 and s["marketing_level"] >= 8
-                 and s["funds"] >= 5000
-                 and s["wire"] >= 1000,
-                 btnInvest.click),
-            ],
-            # P38 Full Monopoly
-            "projects": [29, 38],
-        },
-        {
-            "name": "Monopoly",
-            "exit": lambda s: s["console1"] == "Full market monopoly achieved, public demand increased x10",
-            "rules": [
-                ("qcompute",
-                 lambda s: s["qchip_value"] > 0.1,
-                 lambda: rapid_click(page, "btnQcompute", 500)),
-                ("new_tournament",
-                 lambda s: btnNewTournament.is_enabled(),
-                 btnNewTournament.click),
-                ("run_tournament",
-                 lambda s: btnRunTournament.is_enabled(),
-                 btnRunTournament.click),
-                ("add_processors_to_75",
-                 lambda s: s["processors"] < 75 and btnAddProc.is_enabled(),
-                btnAddProc.click),
-                ("add_memory_to_25",
-                 lambda s: s["processors"] >= 75
-                 and s["memory"] < 25
-                 and btnAddMem.is_enabled(),
-                 btnAddMem.click),
-                ("Shift_funds_to_achieve_monopoly",
-                 lambda s: s["funds"] < 10_000_000
-                 and btnWithdraw.is_enabled(),
-                 btnWithdraw.click),
-            ],
-            # P38 Full Monopoly
-            "projects": [29, 38],
-        },
-        {
-            "name": "Reach 101M clips",
-            "exit": lambda s: s["clips"] >= 101_000_000,
-            "rules": [
-                ("qcompute",
-                 lambda s: s["qchip_value"] > 0.1,
-                 lambda: rapid_click(page, "btnQcompute", 500)),
-                ("new_tournament",
-                 lambda s: btnNewTournament.is_enabled(),
-                 btnNewTournament.click),
-                ("run_tournament",
-                 lambda s: btnRunTournament.is_enabled(),
-                 btnRunTournament.click),
-                ("add_processors_to_75",
-                 lambda s: s["processors"] < 75 and btnAddProc.is_enabled(),
-                btnAddProc.click),
-                ("add_memory_to_25",
-                 lambda s: s["processors"] >= 75
-                 and s["memory"] < 25
-                 and btnAddMem.is_enabled(),
-                 btnAddMem.click),
-                ("raise_clip_price",
-                 lambda s: s["clip_price"] < 0.41,
-                 raise_clip_price.click),
-                ("increase_megaclippers",
-                 lambda s: s["megaclippers"] < 93
-                 and btnMakeMegaClipper.is_enabled(),
-                 btnMakeMegaClipper.click),
-                ("increase_marketing_15",
-                 lambda s: s["marketing_level"] < 14 and btnMarketing.is_enabled(),
-                 btnMarketing.click),
-                ("lowbalance_risk_to_high",
-                 lambda s: s["invst_lvl"] >= 6
-                 and s["invst_risk"] != "hi",
-                 lambda: page.locator("#investStrat").select_option("hi")),
-                ("Increase_investment_level_9",
-                 lambda s: s["invst_lvl"] < 9 and btnImproveInvestments.is_enabled(),
-                 btnImproveInvestments.click),
-                ("invest_for_300M",
-                 lambda s: s["megaclippers"] >= 93
-                 and s["port_value"] < 400_000_000
-                 and s["marketing_level"] >= 14
-                 and s["funds"] >= 50_000
-                 and s["wire"] >= 1000,
-                 btnInvest.click),
-                ("boost_megaclippers_until_101M_clips",
-                 lambda s: s["port_value"] >= 400_000_000
-                 and btnMakeMegaClipper.is_enabled(),
-                 btnMakeMegaClipper.click),
-            ],
-            # P10b Quantum foam anealment (16k wire spools)
-            "projects": ["10b"],
-        },
-        {
-            "name": "Reach 100 Trust for Hypnodrones",
-            "exit": lambda s: s["releasedHypnoDrones"] == 1,
-            "rules": [
-                ("qcompute",
-                 lambda s: s["qchip_value"] > 0.1,
-                 lambda: rapid_click(page, "btnQcompute", 500)),
-                ("new_tournament",
-                 lambda s: btnNewTournament.is_enabled(),
-                 btnNewTournament.click),
-                ("run_tournament",
-                 lambda s: btnRunTournament.is_enabled(),
-                 btnRunTournament.click),
-                ("add_processors_to_75",
-                 lambda s: s["processors"] < 75 and btnAddProc.is_enabled(),
-                btnAddProc.click),
-                ("add_memory_to_25",
-                 lambda s: s["processors"] >= 75 
-                 and s["memory"] < 25
-                 and btnAddMem.is_enabled(),
-                 btnAddMem.click),
-                ("Set_risk_low_once_funded",
-                 lambda s: s["port_value"] >= 256_000_000
-                 and s["invst_risk"] != "low",
-                 lambda: page.locator("#investStrat").select_option("low")),
-                ("sell_down",
-                 lambda s: s["port_value"] >= 1_000,
-                 btnWithdraw.click),
-            ],
-            # P40,40b Bribes to 100T
-            # P35 Release the HypnoDrones
-            "projects": ["40", "40b", "35"],
-        },
-    ]
-
-    return stages
 
 def save_json(page, stage_index, stage_name):
     # Save game state and uclipper stage to json
@@ -577,29 +315,29 @@ def load_json(page):
     page.reload()
     time.sleep(0.1)
     page.evaluate("load1()")
-    page.locator("#investStrat").select_option(risk_value)
-    page.locator("#stratPicker").select_option(strat_value)
+    if page.locator("#investStrat").is_visible():
+        page.locator("#investStrat").select_option(risk_value)
+    if page.locator("#stratPicker").is_visible():
+        page.locator("#stratPicker").select_option(strat_value)
 
     return start_stage
 
 def run_stage(page, stage, stats):
-    while not stage["exit"](stats):
+    while not check_condition(page, stage["exit"], stats):
         tick = stage.get("tick")
         if tick:
-            tick()
+            execute_action(page, tick)
+            stats = read_values(page)
+        
+        for rule in stage["rules"]:
+            if check_condition(page, rule["condition"], stats):
+                execute_action(page, rule["action"])
 
-        time.sleep(0.001)
+        click_projects(page, stage.get("projects", []))
         stats = read_values(page)
 
-        for name, condition, action in stage["rules"]:
-            if condition(stats):
-                action()
-
-        projects = stage.get("projects")
-        if projects:
-            click_projects(page, projects)
-
     return stats
+
 
 def main():
     with sync_playwright() as p:
@@ -614,7 +352,8 @@ def main():
         start_stage = load_json(page)
         save_stage = None #None to not save
 
-        stages = list(make_stages(page))
+        # stages = list(make_stages(page))
+        stages = load_stages_config()
 
         with Progress(
             TextColumn("[bold blue]{task.fields[stage]}"),
@@ -632,7 +371,7 @@ def main():
                 if i >= start_stage:
                     print(f"-- {i} {stage['name']} --")
                     stats = run_stage(page, stage, stats)
-                
+
                 progress.advance(task)
 
         stats = read_values(page)

@@ -1,0 +1,1199 @@
+stages:
+
+  - name: Setup Clip Price
+    exit:
+      stat: clip_price
+      operator: "<="
+      value: 0.03
+    rules:
+      - name: lower_price
+        condition:
+          stat: clip_price
+          operator: ">"
+          value: 0.03
+        action:
+          type: click
+          button: lower_clip_price
+
+  - name: Enable Quantum Computing
+    exit:
+      stat: qchip_active
+      operator: "!="
+      value: 0
+    tick:
+      type: rapid_click
+      button: make_paperclip
+      clicks: 500
+    rules:
+      - name: wirebuyer_stage1
+        condition:
+          all:
+            - stat: wire
+              operator: "<"
+              value: 100
+            - stat: clips
+              operator: "<"
+              value: 450000
+            - button: buy_wire
+              state: enabled
+        action:
+          type: click
+          button: buy_wire
+
+      - name: add_processors_to_5
+        condition:
+          all:
+            - stat: processors
+              operator: "<"
+              value: 5
+            - button: add_processors
+              state: enabled
+        action:
+          type: click
+          button: add_processors
+
+      - name: add_memory_to_10
+        condition:
+          all:
+            - stat: processors
+              operator: ">="
+              value: 5
+            - stat: memory
+              operator: "<"
+              value: 10
+            - button: add_memory
+              state: enabled
+        action:
+          type: click
+          button: add_memory
+
+      - name: raise_price_high_demand
+        condition:
+          all:
+            - stat: clips
+              operator: "<"
+              value: 450000
+            - stat: demand
+              operator: ">"
+              value: 1000
+        action:
+          type: click
+          button: raise_clip_price
+
+      - name: raise_price_prep_next_stage
+        condition:
+          all:
+            - stat: clips
+              operator: ">="
+              value: 450000
+            - stat: clip_price
+              operator: "<"
+              value: 0.20
+        action:
+          type: click
+          button: raise_clip_price
+
+      - name: bump_up_marketing_to_5
+        condition:
+          all:
+            - stat: clips
+              operator: ">="
+              value: 450000
+            - stat: marketing_level
+              operator: "<"
+              value: 5
+            - button: marketing
+              state: enabled
+        action:
+          type: click
+          button: marketing
+
+      - name: wirebuyer_stage2
+        condition:
+          all:
+            - stat: clips
+              operator: ">="
+              value: 450000
+            - stat: unsold_clips
+              operator: "<"
+              value: 10000
+            - stat: wire
+              operator: "<"
+              value: 100
+            - button: buy_wire
+              state: enabled
+        action:
+          type: click
+          button: buy_wire
+    projects:
+      - 3
+      - 6
+      - 12
+      - 13
+      - 14
+      - 34
+      - 50
+      - 51
+
+  - name: Bulk upgrade and Strategy Engine unlock
+    exit:
+      stat: strategyEngineFlag
+      operator: "=="
+      value: 1
+    rules:
+      - name: qcompute
+        condition:
+          stat: qchip_value
+          operator: ">"
+          value: 0.1
+        action:
+          type: rapid_click
+          button: qcompute
+          clicks: 500
+
+      - name: wirebuyer_manual
+        condition:
+          all:
+            - stat: wireBuyerStatus
+              operator: "=="
+              value: 0
+            - stat: unsold_clips
+              operator: "<"
+              value: 15000
+            - stat: wire
+              operator: "<"
+              value: 100
+            - button: buy_wire
+              state: enabled
+        action:
+          type: click
+          button: buy_wire
+
+      - name: max_autoclippers
+        condition:
+          all:
+            - stat: autoclippers
+              operator: "<"
+              value: 75
+            - button: make_clipper
+              state: enabled
+        action:
+          type: click
+          button: make_clipper
+
+      - name: increase_megaclippers
+        condition:
+          all:
+            - button: make_mega_clipper
+              state: visible
+            - stat: megaclippers
+              operator: "<"
+              value: 10
+            - button: make_mega_clipper
+              state: enabled
+        action:
+          type: click
+          button: make_mega_clipper
+
+      - name: add_processors_to_15
+        condition:
+          all:
+            - stat: processors
+              operator: "<"
+              value: 15
+            - button: add_processors
+              state: enabled
+        action:
+          type: click
+          button: add_processors
+
+      - name: increase_marketing
+        condition:
+          all:
+            - stat: marketing_level
+              operator: "<"
+              value: 8
+            - button: marketing
+              state: enabled
+        action:
+          type: click
+          button: marketing
+
+      - name: reduce_price_on_wirebuyer
+        condition:
+          all:
+            - stat: wireBuyerStatus
+              operator: "=="
+              value: 1
+            - stat: clip_price
+              operator: ">"
+              value: 0.05
+        action:
+          type: click
+          button: lower_clip_price
+    projects:
+      - 42
+      - 26
+      - 1
+      - 4
+      - 5
+      - 7
+      - 8
+      - 9
+      - 10
+      - 11
+      - 16
+      - 19
+      - 20
+      - 21
+      - 22
+      - 23
+      - 24
+      - 25
+      - 70
+      - 12
+      - 34
+
+  - name: Build Yomi and investment up to 1.2M
+    exit:
+      stat: port_value
+      operator: ">="
+      value: 1200000
+    rules:
+      - name: qcompute
+        condition:
+          stat: qchip_value
+          operator: ">"
+          value: 0.1
+        action:
+          type: rapid_click
+          button: qcompute
+          clicks: 500
+
+      - name: random_strat
+        condition:
+          stat: strat_level
+          operator: "!="
+          value: 0
+        action:
+          type: select
+          element: strategy
+          value: "0"
+
+      - name: new_tournament
+        condition:
+          button: new_tournament
+          state: enabled
+        action:
+          type: click
+          button: new_tournament
+
+      - name: run_tournament
+        condition:
+          button: run_tournament
+          state: enabled
+        action:
+          type: click
+          button: run_tournament
+
+      - name: add_processors_to_75
+        condition:
+          all:
+            - stat: processors
+              operator: "<"
+              value: 75
+            - button: add_processors
+              state: enabled
+        action:
+          type: click
+          button: add_processors
+
+      - name: add_memory_to_25
+        condition:
+          all:
+            - stat: processors
+              operator: ">="
+              value: 75
+            - stat: memory
+              operator: "<"
+              value: 25
+            - button: add_memory
+              state: enabled
+        action:
+          type: click
+          button: add_memory
+
+      - name: increase_marketing_6
+        condition:
+          all:
+            - stat: marketing_level
+              operator: "<"
+              value: 5
+            - button: marketing
+              state: enabled
+        action:
+          type: click
+          button: marketing
+
+      - name: lower_price_to_0.03
+        condition:
+          stat: clip_price
+          operator: ">"
+          value: 0.03
+        action:
+          type: click
+          button: lower_clip_price
+
+      - name: Increase_investment_level_6
+        condition:
+          all:
+            - stat: invst_lvl
+              operator: "<"
+              value: 6
+            - button: improve_investments
+              state: enabled
+        action:
+          type: click
+          button: improve_investments
+
+      - name: Set_risk_med_below_lvl_4
+        condition:
+          all:
+            - stat: invst_lvl
+              operator: "<"
+              value: 6
+            - stat: invst_risk
+              operator: "!="
+              value: med
+        action:
+          type: select
+          element: investment_strategy
+          value: med
+
+      - name: Set_risk_high_after_lvl_6
+        condition:
+          all:
+            - stat: invst_lvl
+              operator: ">="
+              value: 6
+            - stat: invst_risk
+              operator: "!="
+              value: hi
+        action:
+          type: select
+          element: investment_strategy
+          value: hi
+
+      - name: funnel_funds_to_investment_1.2M
+        condition:
+          all:
+            - button: invest
+              state: enabled
+            - stat: funds
+              operator: ">="
+              value: 500
+            - stat: wire
+              operator: ">="
+              value: 1000
+        action:
+          type: click
+          button: invest
+    projects:
+      - 15
+      - 16
+      - 17
+      - 27
+      - 28
+      - 29
+      - 30
+      - 31
+      - 37
+
+  - name: Reach Hostile takeover
+    exit:
+      stat: console1
+      operator: "=="
+      value: "Global Fasteners acquired, public demand increased x5"
+    rules:
+      - name: qcompute
+        condition:
+          stat: qchip_value
+          operator: ">"
+          value: 0.1
+        action:
+          type: rapid_click
+          button: qcompute
+          clicks: 500
+
+      - name: new_tournament
+        condition:
+          button: new_tournament
+          state: enabled
+        action:
+          type: click
+          button: new_tournament
+
+      - name: run_tournament
+        condition:
+          button: run_tournament
+          state: enabled
+        action:
+          type: click
+          button: run_tournament
+
+      - name: add_processors_to_75
+        condition:
+          all:
+            - stat: processors
+              operator: "<"
+              value: 75
+            - button: add_processors
+              state: enabled
+        action:
+          type: click
+          button: add_processors
+
+      - name: add_memory_to_25
+        condition:
+          all:
+            - stat: processors
+              operator: ">="
+              value: 75
+            - stat: memory
+              operator: "<"
+              value: 25
+            - button: add_memory
+              state: enabled
+        action:
+          type: click
+          button: add_memory
+
+      - name: Increase_investment_level_6
+        condition:
+          all:
+            - stat: invst_lvl
+              operator: "<"
+              value: 6
+            - button: improve_investments
+              state: enabled
+        action:
+          type: click
+          button: improve_investments
+
+      - name: Withdraw_funds_to_achieve_hostile_takeover
+        condition:
+          all:
+            - stat: funds
+              operator: "<"
+              value: 1000000
+            - button: withdraw
+              state: enabled
+        action:
+          type: click
+          button: withdraw
+    projects:
+      - 29
+      - 37
+
+  - name: Build funds up to 12M
+    exit:
+      stat: port_value
+      operator: ">="
+      value: 12000000
+    rules:
+      - name: qcompute
+        condition:
+          stat: qchip_value
+          operator: ">"
+          value: 0.1
+        action:
+          type: rapid_click
+          button: qcompute
+          clicks: 500
+
+      - name: new_tournament
+        condition:
+          button: new_tournament
+          state: enabled
+        action:
+          type: click
+          button: new_tournament
+
+      - name: run_tournament
+        condition:
+          button: run_tournament
+          state: enabled
+        action:
+          type: click
+          button: run_tournament
+
+      - name: add_processors_to_75
+        condition:
+          all:
+            - stat: processors
+              operator: "<"
+              value: 75
+            - button: add_processors
+              state: enabled
+        action:
+          type: click
+          button: add_processors
+
+      - name: add_memory_to_25
+        condition:
+          all:
+            - stat: processors
+              operator: ">="
+              value: 75
+            - stat: memory
+              operator: "<"
+              value: 25
+            - button: add_memory
+              state: enabled
+        action:
+          type: click
+          button: add_memory
+
+      - name: raise_clip_price
+        condition:
+          stat: clip_price
+          operator: "<"
+          value: 0.13
+        action:
+          type: click
+          button: raise_clip_price
+
+      - name: increase_marketing_10
+        condition:
+          all:
+            - stat: marketing_level
+              operator: "<"
+              value: 10
+            - button: marketing
+              state: enabled
+        action:
+          type: click
+          button: marketing
+
+      - name: increase_megaclippers
+        condition:
+          all:
+            - stat: megaclippers
+              operator: "<"
+              value: 15
+            - button: make_mega_clipper
+              state: enabled
+        action:
+          type: click
+          button: make_mega_clipper
+
+      - name: Increase_investment_level_8
+        condition:
+          all:
+            - stat: invst_lvl
+              operator: "<"
+              value: 8
+            - button: improve_investments
+              state: enabled
+        action:
+          type: click
+          button: improve_investments
+
+      - name: increase_marketing_8
+        condition:
+          all:
+            - stat: marketing_level
+              operator: "<"
+              value: 8
+            - button: marketing
+              state: enabled
+        action:
+          type: click
+          button: marketing
+
+      - name: Set_risk_high_after_lvl_6
+        condition:
+          all:
+            - stat: invst_lvl
+              operator: ">="
+              value: 6
+            - stat: invst_risk
+              operator: "!="
+              value: hi
+        action:
+          type: select
+          element: investment_strategy
+          value: hi
+
+      - name: invest_for_monopoly
+        condition:
+          all:
+            - stat: megaclippers
+              operator: ">="
+              value: 15
+            - stat: marketing_level
+              operator: ">="
+              value: 8
+            - stat: funds
+              operator: ">="
+              value: 5000
+            - stat: wire
+              operator: ">="
+              value: 1000
+        action:
+          type: click
+          button: invest
+    projects:
+      - 29
+      - 38
+
+  - name: Monopoly
+    exit:
+      stat: console1
+      operator: "=="
+      value: "Full market monopoly achieved, public demand increased x10"
+    rules:
+      - name: qcompute
+        condition:
+          stat: qchip_value
+          operator: ">"
+          value: 0.1
+        action:
+          type: rapid_click
+          button: qcompute
+          clicks: 500
+
+      - name: new_tournament
+        condition:
+          button: new_tournament
+          state: enabled
+        action:
+          type: click
+          button: new_tournament
+
+      - name: run_tournament
+        condition:
+          button: run_tournament
+          state: enabled
+        action:
+          type: click
+          button: run_tournament
+
+      - name: add_processors_to_75
+        condition:
+          all:
+            - stat: processors
+              operator: "<"
+              value: 75
+            - button: add_processors
+              state: enabled
+        action:
+          type: click
+          button: add_processors
+
+      - name: add_memory_to_25
+        condition:
+          all:
+            - stat: processors
+              operator: ">="
+              value: 75
+            - stat: memory
+              operator: "<"
+              value: 25
+            - button: add_memory
+              state: enabled
+        action:
+          type: click
+          button: add_memory
+
+      - name: Shift_funds_to_achieve_monopoly
+        condition:
+          all:
+            - stat: funds
+              operator: "<"
+              value: 10000000
+            - button: withdraw
+              state: enabled
+        action:
+          type: click
+          button: withdraw
+    projects:
+      - 29
+      - 38
+
+  - name: Reach 101M clips
+    exit:
+      stat: clips
+      operator: ">="
+      value: 101000000
+    rules:
+      - name: qcompute
+        condition:
+          stat: qchip_value
+          operator: ">"
+          value: 0.1
+        action:
+          type: rapid_click
+          button: qcompute
+          clicks: 500
+
+      - name: new_tournament
+        condition:
+          button: new_tournament
+          state: enabled
+        action:
+          type: click
+          button: new_tournament
+
+      - name: run_tournament
+        condition:
+          button: run_tournament
+          state: enabled
+        action:
+          type: click
+          button: run_tournament
+
+      - name: add_processors_to_75
+        condition:
+          all:
+            - stat: processors
+              operator: "<"
+              value: 75
+            - button: add_processors
+              state: enabled
+        action:
+          type: click
+          button: add_processors
+
+      - name: add_memory_to_25
+        condition:
+          all:
+            - stat: processors
+              operator: ">="
+              value: 75
+            - stat: memory
+              operator: "<"
+              value: 25
+            - button: add_memory
+              state: enabled
+        action:
+          type: click
+          button: add_memory
+
+      - name: raise_clip_price
+        condition:
+          stat: clip_price
+          operator: "<"
+          value: 0.41
+        action:
+          type: click
+          button: raise_clip_price
+
+      - name: increase_megaclippers
+        condition:
+          all:
+            - stat: megaclippers
+              operator: "<"
+              value: 93
+            - button: make_mega_clipper
+              state: enabled
+        action:
+          type: click
+          button: make_mega_clipper
+
+      - name: increase_marketing_15
+        condition:
+          all:
+            - stat: marketing_level
+              operator: "<"
+              value: 14
+            - button: marketing
+              state: enabled
+        action:
+          type: click
+          button: marketing
+
+      - name: lowbalance_risk_to_high
+        condition:
+          all:
+            - stat: invst_lvl
+              operator: ">="
+              value: 6
+            - stat: invst_risk
+              operator: "!="
+              value: hi
+        action:
+          type: select
+          element: investment_strategy
+          value: hi
+
+      - name: Increase_investment_level_9
+        condition:
+          all:
+            - stat: invst_lvl
+              operator: "<"
+              value: 9
+            - button: improve_investments
+              state: enabled
+        action:
+          type: click
+          button: improve_investments
+
+      - name: invest_for_300M
+        condition:
+          all:
+            - stat: megaclippers
+              operator: ">="
+              value: 93
+            - stat: port_value
+              operator: "<"
+              value: 400000000
+            - stat: marketing_level
+              operator: ">="
+              value: 14
+            - stat: funds
+              operator: ">="
+              value: 50000
+            - stat: wire
+              operator: ">="
+              value: 1000
+        action:
+          type: click
+          button: invest
+
+      - name: boost_megaclippers_until_101M_clips
+        condition:
+          all:
+            - stat: port_value
+              operator: ">="
+              value: 400000000
+            - button: make_mega_clipper
+              state: enabled
+        action:
+          type: click
+          button: make_mega_clipper
+    projects:
+      - "10b"
+
+  - name: Free the Hypnodrones
+    exit:
+      stat: releasedHypnoDrones
+      operator: "=="
+      value: 1
+    rules:
+      - name: qcompute
+        condition:
+          stat: qchip_value
+          operator: ">"
+          value: 0.1
+        action:
+          type: rapid_click
+          button: qcompute
+          clicks: 500
+
+      - name: new_tournament
+        condition:
+          button: new_tournament
+          state: enabled
+        action:
+          type: click
+          button: new_tournament
+
+      - name: run_tournament
+        condition:
+          button: run_tournament
+          state: enabled
+        action:
+          type: click
+          button: run_tournament
+
+      - name: add_processors_to_75
+        condition:
+          all:
+            - stat: processors
+              operator: "<"
+              value: 75
+            - button: add_processors
+              state: enabled
+        action:
+          type: click
+          button: add_processors
+
+      - name: add_memory_to_25
+        condition:
+          all:
+            - stat: processors
+              operator: ">="
+              value: 75
+            - stat: memory
+              operator: "<"
+              value: 25
+            - button: add_memory
+              state: enabled
+        action:
+          type: click
+          button: add_memory
+
+      - name: Set_risk_low_once_funded
+        condition:
+          all:
+            - stat: port_value
+              operator: ">="
+              value: 256000000
+            - stat: invst_risk
+              operator: "!="
+              value: low
+        action:
+          type: select
+          element: investment_strategy
+          value: low
+
+      - name: sell_down
+        condition:
+          stat: port_value
+          operator: ">="
+          value: 1000
+        action:
+          type: click
+          button: withdraw
+    projects:
+      - "40"
+      - "40b"
+      - "35"
+
+  - name: Reach Momentum
+    exit:
+      stat: momentumFlag
+      operator: "=="
+      value: 1
+    rules:
+      - name: qcompute
+        condition:
+          stat: qchip_value
+          operator: ">"
+          value: 0.1
+        action:
+          type: rapid_click
+          button: qcompute
+          clicks: 500
+
+      - name: new_tournament
+        condition:
+          button: new_tournament
+          state: enabled
+        action:
+          type: click
+          button: new_tournament
+
+      - name: run_tournament
+        condition:
+          button: run_tournament
+          state: enabled
+        action:
+          type: click
+          button: run_tournament
+
+      - name: increase_solarfarm_level
+        condition:
+          all:
+            - stat: pwr_production
+              operator: "<"
+              value_stat: pwr_consumption
+            - button: add_farm
+              state: visible
+            - button: add_farm
+              state: enabled
+        action:
+          type: click
+          button: add_farm
+
+      - name: increase_battery_level
+        condition:
+          all:
+            - stat: batteryLevel
+              operator: "<"
+              value: 1
+            - button: add_battery
+              state: visible
+            - button: add_battery
+              state: enabled
+        action:
+          type: click
+          button: add_battery
+
+      - name: increase_factory_level
+        condition:
+          all:
+            - stat: factoryLevel
+              operator: "<"
+              value: 8
+            - button: add_factory
+              state: visible
+            - button: add_factory
+              state: enabled
+        action:
+          type: click
+          button: add_factory
+
+      - name: harvester_kickstart
+        condition:
+          all:
+            - stat: harvesterLevel
+              operator: "<"
+              value: 50
+            - button: add_harvester
+              state: visible
+            - button: add_harvester
+              state: enabled
+        action:
+          type: click
+          button: add_harvester
+
+      - name: increase_wire_drone
+        condition:
+          all:
+            - stat: wireDroneLevel
+              operator: "<"
+              value_stat: harvesterLevel
+            - button: add_wire_drone
+              state: visible
+            - button: add_wire_drone
+              state: enabled
+        action:
+          type: click
+          button: add_wire_drone
+
+      - name: harvester_phase2
+        condition:
+          all:
+            - stat: harvesterLevel
+              operator: ">="
+              value: 50
+            - stat: pwr_production
+              operator: ">="
+              value_stat: pwr_consumption
+            - button: add_harvester
+              state: visible
+            - button: add_harvester
+              state: enabled
+        action:
+          type: click
+          button: add_harvester
+    projects:
+      - 18
+      - 125
+      - 126
+      - 127
+      - 41
+      - 43
+      - 44
+      - 45
+
+  - name: Reach 1 Sextillion clips
+    exit:
+      stat: clips
+      operator: ">="
+      value: 1000000000000000000000
+    rules:
+      - name: qcompute
+        condition:
+          stat: qchip_value
+          operator: ">"
+          value: 0.1
+        action:
+          type: rapid_click
+          button: qcompute
+          clicks: 500
+
+      - name: new_tournament
+        condition:
+          button: new_tournament
+          state: enabled
+        action:
+          type: click
+          button: new_tournament
+
+      - name: run_tournament
+        condition:
+          button: run_tournament
+          state: enabled
+        action:
+          type: click
+          button: run_tournament
+
+      - name: increase_solarfarm_level
+        condition:
+          all:
+            - stat: pwr_production
+              operator: "<"
+              value_stat: pwr_consumption
+            - button: add_farm
+              state: visible
+            - button: add_farm
+              state: enabled
+        action:
+          type: click
+          button: add_farm
+
+      - name: max_battery_level
+        condition:
+          all:
+            - stat: batteryLevel
+              operator: "<"
+              value: 10
+            - button: add_battery
+              state: visible
+            - button: add_battery
+              state: enabled
+        action:
+          type: click
+          button: add_battery
+
+      - name: max_factory_level
+        condition:
+          all:
+            - stat: factoryLevel
+              operator: "<"
+              value: 50
+            - button: add_factory
+              state: visible
+            - button: add_factory
+              state: enabled
+        action:
+          type: click
+          button: add_factory
+      
+      - name: max_harvestor
+        condition:
+          all:
+            - stat: pwr_production
+              operator: ">="
+              value_stat: pwr_consumption
+            - button: add_harvester100
+              state: visible
+            - button: add_harvester100
+              state: enabled
+        action:
+          type: click
+          button: add_harvester100
+
+      - name: max_wire_drone
+        condition:
+          all:
+            - stat: wireDroneLevel
+              operator: "<"
+              value_stat: harvesterLevel
+            - button: add_wire_drone100
+              state: visible
+            - button: add_wire_drone100
+              state: enabled
+        action:
+          type: click
+          button: add_wire_drone100
+    projects:
+      - 100
+      - 101
+      - 102
+      - 110
+      - 111
+      - 112
